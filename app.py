@@ -8,7 +8,7 @@ import pytz
 con = mysql.connector.connect(
     host="185.232.14.52",
     database="u760464709_tst_sep",
-    user="u760464709_tst_sep_usr",
+    user="u760464709_tst_sep_reservas",
     password="dJ0CIAFF="
 )
 
