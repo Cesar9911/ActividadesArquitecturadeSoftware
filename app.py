@@ -1,117 +1,99 @@
 from flask import Flask, render_template, request, jsonify, make_response
 import mysql.connector
-import pusher
-import datetime
-import pytz
 
-# Conexión a la base de datos
+# Configuración de la conexión a la base de datos
 con = mysql.connector.connect(
     host="185.232.14.52",
     database="u760464709_tst_sep",
-    user="u760464709_tst_sep_reservas",
+    user="u760464709_tst_sep_usr",
     password="dJ0CIAFF="
 )
 
 app = Flask(__name__)
 
-# Página principal que carga el CRUD de usuarios
+# Ruta para el index
 @app.route("/")
 def index():
-    con.close()
     return render_template("app.html")
 
-# Crear o actualizar un usuario
-@app.route("/usuarios/guardar", methods=["POST"])
-def usuariosGuardar():
+# Función para obtener todas las reservas
+@app.route("/reservas")
+def obtener_reservas():
     if not con.is_connected():
         con.reconnect()
 
-    id_usuario = request.form.get("id_usuario")
+    cursor = con.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM tst0_reservas")
+    reservas = cursor.fetchall()
+    con.close()
+
+    return make_response(jsonify(reservas))
+
+# Función para agregar o editar reservas
+@app.route("/reservas/guardar", methods=["POST"])
+def guardar_reserva():
+    if not con.is_connected():
+        con.reconnect()
+
+    id_reserva = request.form.get("id_reserva")
     nombre_apellido = request.form["nombre_apellido"]
     telefono = request.form["telefono"]
     fecha = request.form["fecha"]
 
     cursor = con.cursor()
-    if id_usuario:  # Actualizar
+
+    if id_reserva:
+        # Si se proporciona id_reserva, entonces es una actualización
         sql = """
-        UPDATE tst0_usuarios SET Nombre_Apellido = %s, Telefono = %s, Fecha = %s WHERE Id_Usuario = %s
+        UPDATE tst0_reservas SET
+        Nombre_Apellido = %s,
+        Telefono = %s,
+        Fecha = %s
+        WHERE Id_Reserva = %s
         """
-        val = (nombre_apellido, telefono, fecha, id_usuario)
-    else:  # Crear nuevo usuario
+        val = (nombre_apellido, telefono, fecha, id_reserva)
+    else:
+        # Si no hay id_reserva, entonces es una inserción
         sql = """
-        INSERT INTO tst0_usuarios (Nombre_Apellido, Telefono, Fecha) VALUES (%s, %s, %s)
+        INSERT INTO tst0_reservas (Nombre_Apellido, Telefono, Fecha)
+        VALUES (%s, %s, %s)
         """
         val = (nombre_apellido, telefono, fecha)
 
     cursor.execute(sql, val)
     con.commit()
-    cursor.close()
     con.close()
 
-    notificar_actualizacion_usuarios()
+    return make_response(jsonify({"status": "success"}))
 
-    return make_response(jsonify({"message": "Usuario guardado exitosamente"}))
-
-# Obtener todos los usuarios
-@app.route("/usuarios", methods=["GET"])
-def obtener_usuarios():
+# Función para obtener los datos de una reserva específica
+@app.route("/reservas/editar", methods=["GET"])
+def editar_reserva():
     if not con.is_connected():
         con.reconnect()
 
+    id_reserva = request.args.get("id_reserva")
     cursor = con.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM tst0_usuarios")
-    usuarios = cursor.fetchall()
-    cursor.close()
+    cursor.execute("SELECT * FROM tst0_reservas WHERE Id_Reserva = %s", (id_reserva,))
+    reserva = cursor.fetchone()
     con.close()
 
-    return make_response(jsonify(usuarios))
+    return make_response(jsonify(reserva))
 
-# Obtener un usuario por su ID
-@app.route("/usuarios/editar", methods=["GET"])
-def editar_usuario():
+# Función para eliminar una reserva
+@app.route("/reservas/eliminar", methods=["POST"])
+def eliminar_reserva():
     if not con.is_connected():
         con.reconnect()
 
-    id_usuario = request.args.get("id")
-    cursor = con.cursor(dictionary=True)
-    sql = "SELECT * FROM tst0_usuarios WHERE Id_Usuario = %s"
-    val = (id_usuario,)
-    cursor.execute(sql, val)
-    usuario = cursor.fetchone()
-    cursor.close()
-    con.close()
-
-    return make_response(jsonify(usuario))
-
-# Eliminar un usuario
-@app.route("/usuarios/eliminar", methods=["POST"])
-def eliminar_usuario():
-    if not con.is_connected():
-        con.reconnect()
-
-    id_usuario = request.form["id"]
+    id_reserva = request.form["id_reserva"]
     cursor = con.cursor()
-    sql = "DELETE FROM tst0_usuarios WHERE Id_Usuario = %s"
-    val = (id_usuario,)
-    cursor.execute(sql, val)
+    cursor.execute("DELETE FROM tst0_reservas WHERE Id_Reserva = %s", (id_reserva,))
     con.commit()
-    cursor.close()
     con.close()
 
-    notificar_actualizacion_usuarios()
-
-    return make_response(jsonify({"message": "Usuario eliminado exitosamente"}))
-
-# Notificar a través de Pusher sobre actualizaciones en la tabla de usuarios
-def notificar_actualizacion_usuarios():
-    pusher_client = pusher.Pusher(
-        app_id="1874485",
-        key="970a7d4d6af4b86adcc6",
-        secret="2e26ccd3273ad909a49d",
-        cluster="us2",
-        ssl=True
-    )
-    pusher_client.trigger("canalUsuarios", "actualizacion", {})
+    return make_response(jsonify({"status": "success"}))
 
 if __name__ == "__main__":
     app.run(debug=True)
+
